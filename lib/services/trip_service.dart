@@ -1,8 +1,10 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import '../models/trip.dart';
 import '../models/trip_history.dart';
 import '../config/environment_config.dart';
+
 import '../utils/network_diagnostics.dart';
 
 class TripService {
@@ -336,6 +338,29 @@ class TripService {
       };
     } catch (e) {
       throw Exception('Error calculating summary: $e');
+    }
+  }
+
+  static Future<Trip?> getLatestTrip() async {
+    try {
+      final uri = Uri.parse('${EnvironmentConfig.tripsBaseUrl}/get_latest_trip.php');
+      final response = await http.get(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['trip'] != null) {
+          return Trip.fromJson(data['trip']);
+        } else {
+          return null;
+        }
+      } else {
+        throw Exception('Failed to load latest trip: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error loading latest trip: $e');
     }
   }
 }

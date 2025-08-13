@@ -195,8 +195,8 @@ class _MapTrackingScreenState extends State<MapTrackingScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _getCurrentLocation,
-        child: const Icon(Icons.my_location),
         tooltip: 'View Location Now',
+        child: const Icon(Icons.my_location),
       ),
     );
   }

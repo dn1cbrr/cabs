@@ -5,6 +5,9 @@ import 'driver_list_screen.dart';
 import 'driver_dashboard.dart';
 import 'admin_user_management_screen.dart';
 import 'admin_routes_screen.dart';
+import '../models/trip.dart';
+import '../services/trip_service.dart';
+import '../widgets/seat_availability_widget.dart';
 
 class DashboardScreen extends StatefulWidget {
   final User user;
@@ -12,10 +15,41 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.user});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() {
+    return _DashboardScreenState();
+  }
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  Trip? _latestTrip;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLatestTrip();
+  }
+
+  Future<void> _fetchLatestTrip() async {
+    try {
+      final trip = await TripService.getLatestTrip();
+      if (mounted) {
+        setState(() {
+          _latestTrip = trip;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   void _handleLogout() async {
     await AuthService.logout();
     if (mounted) {
@@ -55,19 +89,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text(
                         'Welcome, ${widget.user.fullName}!',
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Role: ${widget.user.role.toUpperCase()}',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: widget.user.role == 'admin' 
-                            ? Colors.red 
-                            : Theme.of(context).colorScheme.secondary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                              color: widget.user.role == 'admin'
+                                  ? Colors.red
+                                  : Theme.of(context).colorScheme.secondary,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -82,18 +116,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-              
               const SizedBox(height: 24),
-              
+              // Latest Trip / Seat Availability
+              Text(
+                'Current Trip Status',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              _buildSeatAvailability(),
+              const SizedBox(height: 24),
               // Quick Actions
               Text(
                 'Quick Actions',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 16),
-              
               // Action Buttons Grid
               GridView.count(
                 crossAxisCount: 2,
@@ -112,7 +153,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const AdminRoutesScreen(),
+                            builder: (context) {
+                              return const AdminRoutesScreen();
+                            },
                           ),
                         );
                       },
@@ -126,7 +169,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const DriverDashboard(),
+                          builder: (context) {
+                            return const DriverDashboard();
+                          },
                         ),
                       );
                     },
@@ -150,7 +195,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const AdminUserManagementScreen(),
+                            builder: (context) {
+                              return const AdminUserManagementScreen();
+                            },
                           ),
                         );
                       },
@@ -165,13 +212,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const DriverListScreen(),
+                            builder: (context) {
+                              return const DriverListScreen();
+                            },
                           ),
                         );
                       },
                     ),
                 ],
-            ),
+              ),
             ],
           ),
         ),
@@ -206,13 +255,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildSeatAvailability() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Card(
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Error loading trip data: $_errorMessage',
+            style: TextStyle(color: Colors.red.shade700),
+          ),
+        ),
+      );
+    }
+
+    if (_latestTrip == null) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Center(
+            child: Text(
+              'No active trips found at the moment.',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SeatAvailabilityWidget(trip: _latestTrip!);
   }
 }

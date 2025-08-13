@@ -1,20 +1,28 @@
+// Import necessary packages for HTTP requests and data handling
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
-import '../config/environment_config.dart';
 
+// Authentication service class handling login/logout and API communication
 class AuthService {
-  // Base URL for API using environment configuration
+  // Dynamic base URL based on platform (Android/iOS/Web)
   static String get baseUrl {
-    return EnvironmentConfig.baseUrl;
+    if (Platform.isAndroid) {
+      // Use 10.0.2.2 for Android emulator to access host machine localhost
+      return 'http://10.0.2.2/transit/api';
+
+    } else {
+      // Use virtual host for other platforms
+      return'http://transit.local/api';//'http://192.168.1.7/transit/api'; //
+    }
   }
-  
-  // Login method
+
+  // Login method - sends credentials to PHP backend
   static Future<Map<String, dynamic>> login(String username, String password) async {
     try {
+      // POST request to login endpoint
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login.php'),
         headers: {
@@ -26,10 +34,12 @@ class AuthService {
         }),
       );
 
+      // Parse JSON response
       final data = jsonDecode(response.body);
       
+      // Check if login was successful
       if (response.statusCode == 200 && data['success']) {
-        // Save user data to shared preferences
+        // Save user data to shared preferences for persistent login
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_data', jsonEncode(data['user']));
         await prefs.setBool('is_logged_in', true);
@@ -37,87 +47,52 @@ class AuthService {
         return {
           'success': true,
           'message': data['message'],
-          'user': User.fromJson(data['user']),
+          'user': User.fromJson(data['user']), // Convert JSON to User object
         };
       } else {
-        if (kDebugMode) {
-          print('Login failed: ${data['message']}');
-        }
         return {
           'success': false,
           'message': data['message'] ?? 'Login failed',
         };
       }
-    } on SocketException catch (e) {
-      if (kDebugMode) {
-        print('Login SocketException: $e');
-      }
-      return {
-        'success': false,
-        'message': 'Connection failed. Please check your internet connection and server status.',
-        'error_type': 'socket_exception',
-        'details': e.message,
-        'suggestions': [
-          'Check if your web server is running',
-          'Verify the server URL is correct',
-          'Check your internet connection',
-        ],
-      };
-    } on http.ClientException catch (e) {
-      return {
-        'success': false,
-        'message': 'HTTP error: ${e.message}',
-        'error_type': 'http_exception',
-      };
     } catch (e) {
-      if (kDebugMode) {
-        print('Login network error: $e');
-      }
+      // Handle network errors
       return {
         'success': false,
         'message': 'Network error: ${e.toString()}',
-        'error_type': 'general_error',
       };
     }
   }
 
-  // Register method with license info
+  // Register method - creates new user account
   static Future<Map<String, dynamic>> register(
     String username,
     String email,
     String password,
     String fullName, {
     String? phoneNumber,
-    String? licenseName,
-    String? licenseNumber,
-    String? licenseAddress,
-    String? licenseCodes,
-    String? licenseExpiration,
     DateTime? birthday,
+    DateTime? expirationDate,
   }) async {
     try {
+      // Build request data with optional fields
       final requestData = {
         'username': username,
         'email': email,
         'password': password,
         'full_name': fullName,
+        'phone_number': phoneNumber,
       };
 
-      // Add phone number if provided
-      if (phoneNumber != null) requestData['phone_number'] = phoneNumber;
-
-      // Add license information if provided
-      if (licenseName != null) requestData['license_name'] = licenseName;
-      if (licenseNumber != null) requestData['license_number'] = licenseNumber;
-      if (licenseAddress != null) requestData['license_address'] = licenseAddress;
-      if (licenseCodes != null) requestData['license_codes'] = licenseCodes;
-      if (licenseExpiration != null) requestData['license_expiration'] = licenseExpiration;
-      
-      // Add optional birthday
+      // Add optional date fields if provided
       if (birthday != null) {
         requestData['birthday'] = birthday.toIso8601String();
       }
+      if (expirationDate != null) {
+        requestData['expiration_date'] = expirationDate.toIso8601String();
+      }
 
+      // POST request to register endpoint
       final response = await http.post(
         Uri.parse('$baseUrl/auth/register.php'),
         headers: {
@@ -149,16 +124,16 @@ class AuthService {
     }
   }
 
-  // Check if user is logged in
-  static Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('is_logged_in') ?? false;
+  // Check if user is logged in using shared preferences
+  static Future<bool> isLoggedIn({SharedPreferences? prefs}) async {
+    final instance = prefs ?? await SharedPreferences.getInstance();
+    return instance.getBool('is_logged_in') ?? false;
   }
 
-  // Get current user data
-  static Future<User?> getCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userData = prefs.getString('user_data');
+  // Get current user data from shared preferences
+  static Future<User?> getCurrentUser({SharedPreferences? prefs}) async {
+    final instance = prefs ?? await SharedPreferences.getInstance();
+    final userData = instance.getString('user_data');
     
     if (userData != null) {
       return User.fromJson(jsonDecode(userData));
@@ -166,7 +141,8 @@ class AuthService {
     return null;
   }
 
-  // Logout method
+
+  // Logout - clear stored user data
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('user_data');
@@ -183,8 +159,7 @@ class AuthService {
         },
       );
 
-      final data = jsonDecode(response.body);
-      return data;
+      return jsonDecode(response.body);
     } catch (e) {
       return {
         'success': false,
@@ -192,70 +167,8 @@ class AuthService {
       };
     }
   }
-
-  // Register driver method - automatically creates driver account
-  static Future<Map<String, dynamic>> registerDriver({
-    required String username,
-    required String email,
-    required String password,
-    required String fullName,
-    required String phoneNumber,
-    required String licenseName,
-    required String licenseNumber,
-    required String licenseAddress,
-    required String licenseCodes,
-    required String licenseExpiration,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/register_driver.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'username': username,
-          'email': email,
-          'password': password,
-          'full_name': fullName,
-          'phone_number': phoneNumber,
-          'license_name': licenseName,
-          'license_number': licenseNumber,
-          'license_address': licenseAddress,
-          'license_codes': licenseCodes,
-          'license_expiration': licenseExpiration,
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-      
-      if (response.statusCode == 201 && data['success']) {
-        // Save user data to shared preferences
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_data', jsonEncode(data['user']));
-        await prefs.setBool('is_logged_in', true);
-        
-        return {
-          'success': true,
-          'message': data['message'],
-          'user': User.fromJson(data['user']),
-          'driver': data['driver'],
-        };
-      } else {
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Driver registration failed',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
-    }
-  }
-
-  // Verify OTP method
-  static Future<Map<String, dynamic>> verifyOtp(int userId, String otpCode) async {
+  
+  static Future<Map<String, dynamic>> verifyOtp(int userId, String otp) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/verify_otp.php'),
@@ -264,23 +177,10 @@ class AuthService {
         },
         body: jsonEncode({
           'user_id': userId,
-          'otp_code': otpCode,
+          'otp': otp,
         }),
       );
-
-      final data = jsonDecode(response.body);
-      
-      if (response.statusCode == 200 && data['success']) {
-        return {
-          'success': true,
-          'message': data['message'],
-        };
-      } else {
-        return {
-          'success': false,
-          'message': data['message'] ?? 'OTP verification failed',
-        };
-      }
+      return jsonDecode(response.body);
     } catch (e) {
       return {
         'success': false,
@@ -289,7 +189,25 @@ class AuthService {
     }
   }
 
-  // Delete account method
+  static Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/forgot_password.php'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'email': email}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+
   static Future<Map<String, dynamic>> deleteAccount(int userId) async {
     try {
       final response = await http.post(
@@ -297,47 +215,9 @@ class AuthService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'user_id': userId,
-        }),
+        body: jsonEncode({'user_id': userId}),
       );
-
-      // Check if response body is valid JSON
-      if (response.body.isEmpty) {
-        return {
-          'success': false,
-          'message': 'Empty response from server',
-        };
-      }
-
-      // Try to parse JSON, but catch format exceptions
-      Map<String, dynamic> data;
-      try {
-        data = jsonDecode(response.body);
-      } catch (e) {
-        // If JSON parsing fails, return the raw response for debugging
-        return {
-          'success': false,
-          'message': 'Invalid response format from server: ${response.body}',
-        };
-      }
-      
-      if (response.statusCode == 200 && data['success'] == true) {
-        // Clear user data from shared preferences on successful deletion
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('user_data');
-        await prefs.setBool('is_logged_in', false);
-        
-        return {
-          'success': true,
-          'message': data['message'],
-        };
-      } else {
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Account deletion failed',
-        };
-      }
+      return jsonDecode(response.body);
     } catch (e) {
       return {
         'success': false,
@@ -346,4 +226,3 @@ class AuthService {
     }
   }
 }
-

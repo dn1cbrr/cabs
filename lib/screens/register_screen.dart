@@ -44,6 +44,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       setState(() => _isLoading = true);
 
+      // Store BuildContext-dependent objects before async gap
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+
       try {
         final result = await AuthService.register(
           _usernameController.text,
@@ -53,107 +57,102 @@ class _RegisterScreenState extends State<RegisterScreen> {
           phoneNumber: _phoneNumberController.text,
         );
 
-        if (mounted) {
-          setState(() => _isLoading = false);
-          
-          if (result['success']) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(result['message'])),
-            );
-            
-            // Check if OTP is required
-            if (result['otp_required'] == true) {
-              // Show OTP verification dialog
-              _showOtpDialog(context, result['user'].id);
-            } else {
-              // Redirect to user dashboard
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DashboardScreen(user: result['user']),
-                ),
-              );
+        if (!mounted) return;
+
+        setState(() => _isLoading = false);
+
+        if (result['success']) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text(result['message'])),
+          );
+
+          // Check if OTP is required
+          if (result['otp_required'] == true) {
+            // Show OTP verification dialog and wait for result
+            final otpVerified = await _showOtpDialog(context, result['user'].id);
+
+            if (otpVerified == true) {
+              if (!mounted) return;
+              // Get current user and navigate to dashboard
+              final currentUser = await AuthService.getCurrentUser();
+              if (mounted && currentUser != null) {
+                navigator.pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => DashboardScreen(user: currentUser),
+                  ),
+                );
+              }
             }
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(result['message'])),
+            // Redirect to user dashboard
+            navigator.pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => DashboardScreen(user: result['user']),
+              ),
             );
           }
-        }
-      } catch (e) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${e.toString()}')),
+        } else {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(content: Text(result['message'])),
           );
         }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        scaffoldMessenger.showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
       }
     }
   }
 
-  Future<void> _showOtpDialog(BuildContext context, int userId) async {
+
+  Future<bool?> _showOtpDialog(BuildContext context, int userId) async {
     final otpController = TextEditingController();
-    
-    showDialog(
+
+    return showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
             bool isLoading = false;
-            
-            Future<void> handleCancel() async {
-              Navigator.of(context).pop();
-            }
-            
+
             Future<void> handleVerify() async {
               setState(() => isLoading = true);
-              
+
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+
               try {
-                final result = await AuthService.verifyOtp(userId, otpController.text);
-                
-                if (context.mounted) {
-                  if (result['success']) {
-                    // OTP verified successfully, get current user and redirect to dashboard
-                    Navigator.of(context).pop(); // Close OTP dialog
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(result['message'])),
-                    );
-                    
-                    // Get current user and navigate to dashboard
-                    final currentUser = await AuthService.getCurrentUser();
-                    if (currentUser != null && context.mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => DashboardScreen(user: currentUser),
-                        ),
-                      );
-                    }
-                  } else {
-                    // OTP verification failed
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(result['message'])),
-                    );
-                    setState(() => isLoading = false);
-                  }
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString()}')),
+                final result =
+                    await AuthService.verifyOtp(userId, otpController.text);
+
+                if (!context.mounted) return;
+
+                if (result['success']) {
+                  Navigator.of(dialogContext).pop(true);
+                } else {
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(content: Text(result['message'])),
                   );
                   setState(() => isLoading = false);
                 }
+              } catch (e) {
+                if (!context.mounted) return;
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(content: Text('Error: ${e.toString()}')),
+                );
+                setState(() => isLoading = false);
               }
             }
-            
+
             return AlertDialog(
               title: const Text('Verify OTP'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Please enter the OTP sent to your email or phone number'),
+                  const Text(
+                      'Please enter the OTP sent to your email or phone number'),
                   const SizedBox(height: 20),
                   TextField(
                     controller: otpController,
@@ -169,7 +168,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: isLoading ? null : handleCancel,
+                  onPressed: isLoading
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -183,6 +184,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       },
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

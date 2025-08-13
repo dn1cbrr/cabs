@@ -21,12 +21,17 @@ class EmailConfig {
             
             // Use environment variables or configuration file for sensitive data
             $this->mail->Username = $_ENV['SMTP_USERNAME'] ?? 'nnnnnniel143@gmail.com';
-            $this->mail->Password = $_ENV['SMTP_PASSWORD'] ?? 'Cabs090403!';
+
+            $this->mail->Password = $_ENV['SMTP_PASSWORD'] ?? 'zveu iqha kqja vekx';
+
+
             
             $this->mail->SMTPSecure = 'tls';
             $this->mail->Port = 587;
             $this->mail->setFrom('noreply@transitapp.com', 'Transit App');
             $this->mail->SMTPDebug = 0; // Set to 2 for debugging
+
+
             $this->mail->CharSet = 'UTF-8';
             
             // Additional security settings

@@ -1,12 +1,14 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import '../models/trip.dart';
 
 class SeatAvailabilityWidget extends StatelessWidget {
   final Trip trip;
   const SeatAvailabilityWidget({
-    Key? key,
+    super.key,
     required this.trip,
-  }) : super(key: key);
+  });
 
 
   @override

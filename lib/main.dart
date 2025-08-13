@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_service.dart';
+import 'config/environment_config.dart';
+
 import 'models/user.dart';
+
 import 'screens/dashboard_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/driver_dashboard_screen.dart';
 import 'screens/map_tracking_screen.dart';
+import 'screens/forgot_password_screen.dart';
 
 void main() {
+  // Set the IP address for the development environment for external device testing
+  EnvironmentConfig.useLocalIp('192.168.1.7');
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -58,14 +66,19 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLoginStatus();
+    });
   }
 
+
   void _checkLoginStatus() async {
-    final isLoggedIn = await AuthService.isLoggedIn();
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = await AuthService.isLoggedIn(prefs: prefs);
     if (isLoggedIn && mounted) {
-      final user = await AuthService.getCurrentUser();
+      final user = await AuthService.getCurrentUser(prefs: prefs);
       if (user != null) {
+        // ignore: use_build_context_synchronously
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (context) => DashboardScreen(user: user),
@@ -74,6 +87,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     }
   }
+
 
   @override
   void dispose() {
@@ -104,7 +118,7 @@ class _MyHomePageState extends State<MyHomePage> {
             MaterialPageRoute(
               builder: (context) => DashboardScreen(user: user),
             ),
-          );
+          );'http://transit.local/api';
         }
       } else {
         if (mounted) {
@@ -238,7 +252,28 @@ class _MyHomePageState extends State<MyHomePage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ForgotPasswordScreen(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 // Login Button
                 ElevatedButton(

@@ -47,11 +47,10 @@ dependencies:
   
   # Image picker for profile photos
   image_picker: ^1.0.4
-  # Mapbox Maps SDK for Flutter
-  mapbox_gl: ^0.16.0
   
-  # Mapbox Search SDK
-  mapbox_search: ^3.0.1+2
+  # Google Maps for Flutter
+  google_maps_flutter: ^2.12.3
+  
   geolocator: ^14.0.2
   flutter_blue_plus: ^1.31.15
   intl: ^0.20.2
