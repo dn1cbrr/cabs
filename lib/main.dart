@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_service.dart';
 import 'config/environment_config.dart';
-
 import 'models/user.dart';
-
 import 'screens/dashboard_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/driver_dashboard_screen.dart';

@@ -82,7 +82,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 ));
             }
         }
-        
     } else {
         // Missing data
         http_response_code(400);

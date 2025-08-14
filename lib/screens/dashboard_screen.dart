@@ -5,6 +5,7 @@ import 'driver_list_screen.dart';
 import 'driver_dashboard.dart';
 import 'admin_user_management_screen.dart';
 import 'admin_routes_screen.dart';
+import 'seat_management_screen.dart';
 import '../models/trip.dart';
 import '../services/trip_service.dart';
 import '../widgets/seat_availability_widget.dart';
