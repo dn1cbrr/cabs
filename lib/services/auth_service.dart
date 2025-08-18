@@ -55,11 +55,32 @@ class AuthService {
           'message': data['message'] ?? 'Login failed',
         };
       }
-    } catch (e) {
-      // Handle network errors
+    } on SocketException catch (e) {
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Connection failed: Unable to reach server. Please check your network connection and server status.',
+        'error_type': 'network',
+        'details': e.message,
+      };
+    } on FormatException catch (e) {
+      return {
+        'success': false,
+        'message': 'Invalid response format from server',
+        'error_type': 'format',
+        'details': e.toString(),
+      };
+    } on HttpException catch (e) {
+      return {
+        'success': false,
+        'message': 'HTTP error occurred',
+        'error_type': 'http',
+        'details': e.message,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Unexpected error: ${e.toString()}',
+        'error_type': 'unknown',
       };
     }
   }

@@ -1,6 +1,6 @@
 class EnvironmentConfig {
   // Updated for physical device testing via USB
-  static const String _devBaseUrl = 'http://192.168.1.5/transit/api';
+  static const String _devBaseUrl = 'http://192.168.1.7/transit/api';
   
   // Production environment
   static const String _prodBaseUrl = 'https://your-production-domain.com/api';

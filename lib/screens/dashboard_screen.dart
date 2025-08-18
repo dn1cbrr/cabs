@@ -6,6 +6,7 @@ import 'driver_dashboard.dart';
 import 'admin_user_management_screen.dart';
 import 'admin_routes_screen.dart';
 import 'seat_management_screen.dart';
+import 'seat_visualization_screen.dart';
 import '../models/trip.dart';
 import '../services/trip_service.dart';
 import '../widgets/seat_availability_widget.dart';
@@ -184,6 +185,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Colors.green,
                     () {
                       Navigator.pushNamed(context, '/map-tracking');
+                    },
+                  ),
+                  _buildActionCard(
+                    context,
+                    'View Seat Monitoring',
+                    Icons.monitor_heart,
+                    Colors.teal,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) {
+                            return const SeatVisualizationScreen();
+                          },
+                        ),
+                      );
                     },
                   ),
                   if (widget.user.role == 'admin')
