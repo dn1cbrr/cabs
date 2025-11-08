@@ -1,112 +1,144 @@
-# ESP32 Bluetooth Seat Occupancy System Setup Guide
+      # ESP32 WebSocket Server Setup Guide for Arduino IDE
 
 ## Overview
-This guide provides step-by-step instructions to set up the ESP32-based seat occupancy monitoring system with Bluetooth connectivity.
+This guide will help you set up the ESP32 WebSocket server for real-time seat monitoring using Arduino IDE. The server provides WebSocket connections for Flutter apps to receive live seat occupancy data.
 
-## Hardware Requirements
-- **ESP32 DevKit** (any ESP32 board with BLE support)
-- **Pressure sensors** (4x FSR or load cells for 4 seats)
-- **Jumper wires** for connections
-- **Breadboard** or PCB for prototyping
-- **USB cable** for power/programming
+## Prerequisites
+- Arduino IDE (version 1.8.x or later)
+- ESP32 development board
+- IR sensor module (TCRT5000 or similar)
+- LEDs (Green, Red, Status LED)
+- Jumper wires
+- Breadboard or PCB
 
-## Software Requirements
-- **Arduino IDE** with ESP32 board support
-- **Flutter** with Flutter Blue Plus package
-- **Node.js** (optional for backend integration)
+## Step 1: Install Arduino IDE
+1. Download Arduino IDE from [arduino.cc](https://www.arduino.cc/en/software)
+2. Install the IDE on your computer (Windows/Mac/Linux)
 
-## Step 1: Hardware Setup
-
-### ESP32 Pin Connections
-```
-ESP32 Pin    | Component
--------------|------------------
-GPIO32       | Seat Sensor 1
-GPIO33       | Seat Sensor 2
-GPIO25       | Seat Sensor 3
-GPIO26       | Seat Sensor 4
-GPIO2        | LED Indicator
-GPIO4        | Buzzer
-```
-
-### Sensor Wiring
-- Connect each pressure sensor to the corresponding GPIO pin
-- Add pull-down resistors (10kΩ) between each sensor and ground
-- Connect LED and buzzer to their respective pins
-
-## Step 2: Software Setup
-
-### ESP32 Arduino Code
-1. Install Arduino IDE
-2. Add ESP32 board support via Boards Manager
-3. Upload the provided `esp32_seat_monitor.ino` file
-4. Verify the code compiles and uploads successfully
-
-### Flutter App Setup
-1. Install Flutter SDK
-2. Add dependencies to `pubspec.yaml`:
-   ```yaml
-   dependencies:
-     flutter_blue_plus: ^1.31.15
+## Step 2: Install ESP32 Board Package
+1. Open Arduino IDE
+2. Go to **File > Preferences**
+3. In **Additional Board Manager URLs**, add:
    ```
-3. Run `flutter pub get` to install dependencies
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+4. Go to **Tools > Board > Boards Manager**
+5. Search for "ESP32" and install **"ESP32 by Espressif Systems"**
 
-## Step 3: Configuration
+## Step 3: Install Required Libraries
+1. Go to **Tools > Manage Libraries**
+2. Install these libraries:
+   - **WebSockets** by Markus Sattler (search for "WebSockets")
+   - **ArduinoJson** by Benoit Blanchon (search for "ArduinoJson")
 
-### ESP32 Configuration
-- Device Name: "TransitSeatMonitor"
-- Service UUID: "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-- Characteristic UUID: "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+## Step 4: Hardware Connections
+Connect the following components to your ESP32:
 
-### Flutter App Configuration
-- Service UUID: "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-- Characteristic UUID: "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+| Component | ESP32 Pin | Description |
+|-----------|-----------|-------------|
+| IR Sensor Signal | GPIO 4 | Analog input for seat detection |
+| Green LED | GPIO 18 | Indicates seat is occupied |
+| Red LED | GPIO 19 | Indicates seat is vacant |
+| Status LED | GPIO 2 | Shows system status |
+| IR Sensor VCC | 3.3V | Power supply |
+| IR Sensor GND | GND | Ground connection |
 
-## Step 4: Testing
+## Step 5: Configure WiFi Settings
+1. Open `ESP32_WebSocket_Server.ino`
+2. Find these lines and update with your WiFi credentials:
+```cpp
+const char* ssid = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+```
 
-### ESP32 Testing
-1. Upload the Arduino code
-2. Connect pressure sensors
-3. Test sensor readings via serial monitor
-4. Verify BLE advertising
+## Step 6: Upload the Code
+1. Connect ESP32 to computer via USB cable
+2. Select your ESP32 board:
+   - **Tools > Board > ESP32 Arduino > ESP32 Dev Module**
+3. Select the correct COM port:
+   - **Tools > Port > COMx** (Windows) or **/dev/ttyUSBx** (Linux/Mac)
+4. Click **Upload** button (→) or press **Ctrl+U**
 
-### Flutter App Testing
-1. Run the Flutter app
-2. Scan for ESP32 devices
-3. Connect to the device
-4. Verify data transmission
+## Step 7: Monitor Output
+1. Open **Tools > Serial Monitor** or press **Ctrl+Shift+M**
+2. Set baud rate to **115200**
+3. You should see connection messages and IP address
 
-## Step 5: Integration
+## Step 8: Testing the Setup
+1. After successful upload, ESP32 will connect to WiFi
+2. Note the IP address shown in Serial Monitor
+3. The WebSocket server will be available at: `ws://[IP_ADDRESS]:81`
 
-### Backend Integration
-- Use the provided Flutter services to integrate with your backend
-- Update seat occupancy data in real-time
-- Sync with your transit app database
+## Step 9: Flutter App Configuration
+Update your Flutter app's WebSocket URL:
+```dart
+const String websocketUrl = 'ws://[YOUR_ESP32_IP]:81';
+```
 
 ## Troubleshooting
 
-### Common Issues
-1. **ESP32 not detected**: Check power and connections
-2. **BLE not working**: Verify service UUIDs and characteristics
-3. **Data not updating**: Check sensor connections and thresholds
+### Common Issues and Solutions
 
-### Error Messages
-- "Device not found": Ensure ESP32 is powered and advertising
-- "Connection failed": Check Bluetooth permissions
-- "Data not updating": Verify sensor readings and thresholds
+**1. Board not detected**
+- Try different USB cable
+- Install CP2102 drivers (check Device Manager)
+- Try different USB port
 
-## Deployment
+**2. Compilation errors**
+- Ensure all libraries are installed correctly
+- Check ESP32 board package is installed
+- Verify code syntax
 
-### Production Setup
-1. Use proper PCB instead of breadboard
-2. Add proper power management
-3. Implement error handling
-4. Add logging and monitoring
+**3. WiFi connection issues**
+- Check SSID and password spelling
+- Ensure 2.4GHz WiFi (ESP32 doesn't support 5GHz)
+- Move closer to router
 
-### Maintenance
-- Regular sensor calibration
-- Battery monitoring
-- Software updates
+**4. WebSocket connection fails**
+- Verify ESP32 IP address in Serial Monitor
+- Check firewall settings
+- Ensure port 81 is not blocked
 
-## Support
-For any issues or questions, please refer to the GitHub repository or contact support.
+### Serial Monitor Commands
+- **Reset ESP32**: Press EN button on board
+- **Enter Download Mode**: Hold BOOT button while pressing EN
+
+## Advanced Configuration
+
+### Adjusting Sensor Sensitivity
+Modify the threshold value in the code:
+```cpp
+const int IR_THRESHOLD = 500; // Adjust based on your sensor
+```
+
+### Changing WebSocket Port
+Modify the port number:
+```cpp
+WebSocketsServer webSocket = WebSocketsServer(81); // Change to desired port
+```
+
+### Adding More Seats
+1. Duplicate the sensor and LED connections
+2. Update `seatId` for each additional seat
+3. Modify the JSON structure to handle multiple seats
+
+## Testing with Flutter App
+1. Install the Flutter app on your device
+2. Ensure device is on same WiFi network as ESP32
+3. Update WebSocket URL in Flutter app
+4. Test seat occupancy detection by placing objects on the sensor
+
+## Performance Optimization
+- Use shorter sensor reading intervals for faster response
+- Implement debouncing to prevent false triggers
+- Add error handling for network disconnections
+
+## Security Considerations
+- Change default WiFi credentials
+- Consider adding authentication for WebSocket connections
+- Use WPA2/WPA3 encryption for WiFi
+
+## Additional Resources
+- [ESP32 Arduino Core Documentation](https://docs.espressif.com/projects/arduino-esp32/en/latest/)
+- [WebSocket Library Documentation](https://github.com/Links2004/arduinoWebSockets)
+- [ArduinoJson Library Documentation](https://arduinojson.org/)

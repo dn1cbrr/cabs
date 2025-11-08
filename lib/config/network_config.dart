@@ -1,49 +1,45 @@
 import 'dart:io';
 
 class NetworkConfig {
-  // Centralized network configuration
-  static const String _devBaseUrl = 'http://192.168.1.7/transit/api';
-  static const String _wsUrl = 'ws://192.168.1.7:8080/seats';
-  
-  // Production URLs
-  static const String _prodBaseUrl = 'https://your-production-domain.com/api';
-  static const String _prodWsUrl = 'wss://your-production-domain.com/seats';
-  
-  static bool get isProduction => false;
-  
-  // Get appropriate URLs based on environment
-  static String get baseUrl => isProduction ? _prodBaseUrl : _devBaseUrl;
-  static String get wsUrl => isProduction ? _prodWsUrl : _wsUrl;
-  
-  // API endpoints
-  static String get authBaseUrl => '$baseUrl/auth';
-  static String get tripsBaseUrl => '$baseUrl/drivers/trips';
-  static String get driversBaseUrl => '$baseUrl/drivers';
-  static String get testUrl => '$baseUrl/test.php';
-  
-  // WebSocket endpoints
-  static String get seatWebSocketUrl => wsUrl;
-  
-  // Network diagnostics
-  static Future<bool> testConnection() async {
-    try {
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 5);
-      final request = await client.getUrl(Uri.parse(testUrl));
-      final response = await request.close();
-      return response.statusCode == 200;
-    } catch (e) {
-      return false;
+  // Get the correct IP address for your development environment
+  static String get baseUrl {
+    if (Platform.isAndroid) {
+      // For Android emulator
+      return 'http://10.0.2.2/transit/api';
+    } else if (Platform.isIOS) {
+      // For iOS simulator
+      return 'http://localhost/transit/api';
+    } else {
+      // For physical devices and web
+      // You need to update this to your computer's actual IP address
+      return 'http://192.168.1.7/transit/api'; // Change this to your actual IP
     }
   }
-  
-  // Get current network info
-  static Map<String, dynamic> getNetworkInfo() {
-    return {
-      'baseUrl': baseUrl,
-      'wsUrl': wsUrl,
-      'isProduction': isProduction,
-      'platform': Platform.operatingSystem,
-    };
+
+  // Alternative method to get IP from user input
+  static String customBaseUrl = '';
+
+  static void setCustomBaseUrl(String ipAddress) {
+    customBaseUrl = 'http://$ipAddress/transit/api';
   }
+
+  static String get currentBaseUrl {
+    return customBaseUrl.isNotEmpty ? customBaseUrl : baseUrl;
+  }
+
+  // WebSocket URLs - convert HTTP to WS protocol
+  static String get seatWebSocketUrl {
+    String httpUrl = currentBaseUrl;
+    // Convert http:// to ws:// and https:// to wss://
+    if (httpUrl.startsWith('https://')) {
+      return httpUrl.replaceFirst('https://', 'wss://');
+    } else {
+      return httpUrl.replaceFirst('http://', 'ws://');
+    }
+  }
+
+  // Test URLs
+  static String get testUrl => '$currentBaseUrl/test.php';
+  static String get authBaseUrl => '$currentBaseUrl/auth';
+  static String get tripsBaseUrl => '$currentBaseUrl/drivers/trips';
 }

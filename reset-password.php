@@ -1,293 +1,250 @@
 <?php
-// Include necessary files
+session_start();
 require_once 'api/config/database.php';
-require_once 'api/config/email_config.php';
+require_once 'api/utils/email_config.php';
 
-// Initialize database connection
 $database = new Database();
 $db = $database->getConnection();
 
-// Initialize variables
 $error = '';
 $success = '';
-$token = '';
-$isValidToken = false;
 
 // Check if token is provided
-if (isset($_GET['token'])) {
-    $token = $_GET['token'];
-    
-    // Validate token
-    $query = "SELECT pr.user_id, pr.expires_at, pr.is_used, u.username, u.email 
-              FROM password_resets pr 
-              JOIN users u ON pr.user_id = u.id 
-              WHERE pr.reset_token = ? AND pr.is_used = 0 
-              LIMIT 1";
-    
-    $stmt = $db->prepare($query);
-    $stmt->execute([$token]);
-    
-    if ($stmt->rowCount() > 0) {
-        $resetData = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        // Check if token is expired
-        $currentTime = date('Y-m-d H:i:s');
-        if ($currentTime <= $resetData['expires_at']) {
-            $isValidToken = true;
-            $username = $resetData['username'];
-            $email = $resetData['email'];
-        } else {
-            $error = "This password reset link has expired. Please request a new one.";
-        }
-    } else {
-        $error = "Invalid or expired password reset link.";
-    }
+if (!isset($_GET['token']) || empty($_GET['token'])) {
+    header("Location: login.php");
+    exit();
+}
+
+$token = $_GET['token'];
+
+// Validate token
+$query = "SELECT pr.user_id, pr.expires_at, pr.is_used, u.username, u.email 
+          FROM password_resets pr 
+          JOIN users u ON pr.user_id = u.id 
+          WHERE pr.reset_token = ? AND pr.is_used = 0 
+          LIMIT 1";
+
+$stmt = $db->prepare($query);
+$stmt->execute([$token]);
+$resetData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$resetData) {
+    $error = "Invalid or expired reset link.";
 } else {
-    $error = "No reset token provided.";
+    // Check if token is expired
+    $currentTime = date('Y-m-d H:i:s');
+    if ($currentTime > $resetData['expires_at']) {
+        $error = "This password reset link has expired. Please request a new one.";
+    }
 }
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isValidToken) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$error) {
     $newPassword = $_POST['new_password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     
-    // Validate passwords
     if (empty($newPassword) || empty($confirmPassword)) {
-        $error = "Please enter both password fields.";
+        $error = "Please fill in both password fields.";
     } elseif (strlen($newPassword) < 8) {
         $error = "Password must be at least 8 characters long.";
     } elseif ($newPassword !== $confirmPassword) {
         $error = "Passwords do not match.";
     } else {
-        // Update password
+        // Hash new password
         $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
         
-        try {
-            $db->beginTransaction();
-            
-            // Update user password
-            $updateQuery = "UPDATE users SET password = ? WHERE id = ?";
-            $updateStmt = $db->prepare($updateQuery);
-            $updateStmt->execute([$hashedPassword, $resetData['user_id']]);
-            
+        // Update user password
+        $updateQuery = "UPDATE users SET password = ? WHERE id = ?";
+        $updateStmt = $db->prepare($updateQuery);
+        
+        if ($updateStmt->execute([$hashedPassword, $resetData['user_id']])) {
             // Mark token as used
             $markUsedQuery = "UPDATE password_resets SET is_used = 1 WHERE reset_token = ?";
             $markUsedStmt = $db->prepare($markUsedQuery);
             $markUsedStmt->execute([$token]);
             
-            $db->commit();
-            $success = "Your password has been successfully reset. You can now log in with your new password.";
+            $success = "Your password has been reset successfully. You can now <a href='login.php'>login</a> with your new password.";
             
-        } catch (Exception $e) {
-            $db->rollBack();
-            $error = "An error occurred while resetting your password. Please try again.";
+            // Clear any session data
+            session_destroy();
+        } else {
+            $error = "Failed to reset password. Please try again.";
         }
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Password - Transit App</title>
+    <title>Reset Password - Transit System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
         .reset-container {
             background: white;
-            border-radius: 10px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
             padding: 40px;
+            max-width: 450px;
             width: 100%;
-            max-width: 400px;
+            margin: 20px;
         }
-        
-        .logo {
+        .reset-header {
             text-align: center;
             margin-bottom: 30px;
         }
-        
-        .logo h1 {
-            color: #007bff;
-            font-size: 28px;
+        .reset-header h2 {
+            color: #333;
+            font-weight: 600;
             margin-bottom: 10px;
         }
-        
-        .logo p {
+        .reset-header p {
             color: #666;
             font-size: 14px;
         }
-        
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
+        .form-group label {
+            font-weight: 600;
             color: #333;
-            font-weight: 500;
+            margin-bottom: 8px;
+            display: block;
         }
-        
-        input[type="password"] {
-            width: 100%;
-            padding: 12px;
+        .form-control {
             border: 1px solid #ddd;
-            border-radius: 5px;
+            border-radius: 8px;
+            padding: 12px 15px;
             font-size: 16px;
-            transition: border-color 0.3s;
+            transition: all 0.3s ease;
         }
-        
-        input[type="password"]:focus {
-            outline: none;
-            border-color: #007bff;
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
         }
-        
-        .password-requirements {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
         .btn-reset {
-            width: 100%;
-            padding: 12px;
-            background: #007bff;
-            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
-            border-radius: 5px;
-            font-size: 16px;
+            border-radius: 8px;
+            padding: 12px 30px;
+            color: white;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+        .btn-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .alert {
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .password-toggle {
+            position: relative;
+        }
+        .password-toggle .toggle-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
             cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        
-        .btn-reset:hover:not(:disabled) {
-            background: #0056b3;
-        }
-        
-        .btn-reset:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 12px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .success-message {
-            background: #d4edda;
-            color: #155724;
-            padding: 12px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border: 1px solid #c3e6cb;
-            text-align: center;
-        }
-        
-        .login-link {
-            text-align: center;
-            margin-top: 20px;
             color: #666;
-        }
-        
-        .login-link a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        
-        .login-link a:hover {
-            text-decoration: underline;
         }
     </style>
 </head>
 <body>
     <div class="reset-container">
-        <div class="logo">
-            <h1>Transit App</h1>
-            <p>Reset Your Password</p>
+        <div class="reset-header">
+            <i class="fas fa-key fa-3x text-primary mb-3"></i>
+            <h2>Reset Your Password</h2>
+            <?php if (!$error): ?>
+                <p>Enter your new password below for account: <strong><?php echo htmlspecialchars($resetData['username']); ?></strong></p>
+            <?php endif; ?>
         </div>
-        
-        <?php if (!empty($error)): ?>
-            <div class="error-message">
-                <?php echo htmlspecialchars($error); ?>
+
+        <?php if ($error): ?>
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> <?php echo htmlspecialchars($error); ?>
             </div>
-        <?php endif; ?>
-        
-        <?php if (!empty($success)): ?>
-            <div class="success-message">
-                <?php echo htmlspecialchars($success); ?>
+            <div class="text-center">
+                <a href="forgot_password.php" class="btn btn-primary">Request New Reset Link</a>
             </div>
-            <div class="login-link">
-                <a href="login.php">Go to Login</a>
+        <?php elseif ($success): ?>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i> <?php echo $success; ?>
             </div>
-        <?php elseif ($isValidToken): ?>
+        <?php else: ?>
             <form method="POST" action="">
                 <div class="form-group">
-                    <label for="username">Username:</label>
-                    <input type="text" id="username" value="<?php echo htmlspecialchars($username); ?>" disabled>
+                    <label for="new_password">New Password</label>
+                    <div class="password-toggle">
+                        <input type="password" class="form-control" id="new_password" name="new_password" required>
+                        <i class="fas fa-eye toggle-icon" onclick="togglePassword('new_password')"></i>
+                    </div>
+                    <small class="text-muted">Must be at least 8 characters long</small>
                 </div>
                 
                 <div class="form-group">
-                    <label for="email">Email:</label>
-                    <input type="email" id="email" value="<?php echo htmlspecialchars($email); ?>" disabled>
+                    <label for="confirm_password">Confirm New Password</label>
+                    <div class="password-toggle">
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                        <i class="fas fa-eye toggle-icon" onclick="togglePassword('confirm_password')"></i>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="new_password">New Password:</label>
-                    <input type="password" id="new_password" name="new_password" required minlength="8">
-                    <div class="password-requirements">Must be at least 8 characters long</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="confirm_password">Confirm New Password:</label>
-                    <input type="password" id="confirm_password" name="confirm_password" required minlength="8">
-                </div>
-                
-                <button type="submit" class="btn-reset">Reset Password</button>
+                <button type="submit" class="btn btn-reset">
+                    <i class="fas fa-lock"></i> Reset Password
+                </button>
             </form>
         <?php endif; ?>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Client-side validation
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = input.nextElementSibling;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        // Form validation
         document.querySelector('form')?.addEventListener('submit', function(e) {
-            const newPassword = document.getElementById('new_password').value;
+            const password = document.getElementById('new_password').value;
             const confirmPassword = document.getElementById('confirm_password').value;
             
-            if (newPassword !== confirmPassword) {
+            if (password !== confirmPassword) {
                 e.preventDefault();
                 alert('Passwords do not match!');
+                return false;
             }
             
-            if (newPassword.length < 8) {
+            if (password.length < 8) {
                 e.preventDefault();
                 alert('Password must be at least 8 characters long!');
+                return false;
             }
         });
     </script>
 </body>
 </html>
-<?php
-// Close database connection
-$db = null;
-?>

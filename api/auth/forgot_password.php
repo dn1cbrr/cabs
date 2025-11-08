@@ -45,8 +45,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $insertStmt->execute([$user['id'], $resetToken, $expiresAt]);
                 
                 if ($insertStmt) {
-                    // Create reset link - adjust the URL based on your environment
-                    $resetLink = "http://localhost/transit/reset-password.php?token=" . $resetToken;
+                    // Create reset link - ensure correct path structure
+                    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
+                    $host = $_SERVER['HTTP_HOST'];
+                    $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
+                    $basePath = rtrim($scriptPath, '/');
+                    $resetLink = "{$protocol}://{$host}{$basePath}/../../reset-password.php?token={$resetToken}";
+                    
+                    // Clean up the path
+                    $resetLink = str_replace('/api/auth/../../', '/', $resetLink);
                     
                     // For development/testing - log the reset link
                     EmailHelper::logPasswordReset($email, $resetLink, $user['username']);

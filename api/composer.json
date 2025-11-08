@@ -1,0 +1,15 @@
+{
+    "require": {
+        "phpmailer/phpmailer": "^6.8",
+        "league/oauth2-google": "^3.0",
+        "league/oauth2-client": "^2.6",
+        "hayageek/oauth2-yahoo": "^2.0",
+        "stevenmaguire/oauth2-microsoft": "^2.2",
+        "greew/oauth2-azure-provider": "^2.0"
+    },
+    "config": {
+        "platform": {
+            "php": "8.1"
+        }
+    }
+}

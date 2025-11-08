@@ -11,54 +11,49 @@ class AuthService {
   static String get baseUrl {
     if (Platform.isAndroid) {
       // Use 10.0.2.2 for Android emulator to access host machine localhost
-      return 'http://10.0.2.2/transit/api';
-
+      return 'http://192.168.1.11/transit/api/';
     } else {
-      // Use virtual host for other platforms
-      return'http://transit.local/api';//'http://192.168.1.7/transit/api'; //
+      // Use default host for other platforms
+      return 'http://192.168.1.7/transit/api'; //''' //; //'http://tpa/sia.lscal/ap.'; //
     }
   }
 
   // Login method - sends credentials to PHP backend
-  static Future<Map<String, dynamic>> login(String username, String password) async {
+  static Future<Map<String, dynamic>> login(
+    String username,
+    String password,
+  ) async {
     try {
       // POST request to login endpoint
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'username': username,
-          'password': password,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
       );
 
       // Parse JSON response
       final data = jsonDecode(response.body);
-      
+
       // Check if login was successful
       if (response.statusCode == 200 && data['success']) {
         // Save user data to shared preferences for persistent login
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_data', jsonEncode(data['user']));
         await prefs.setBool('is_logged_in', true);
-        
+
         return {
           'success': true,
           'message': data['message'],
           'user': User.fromJson(data['user']), // Convert JSON to User object
         };
       } else {
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Login failed',
-        };
+        return {'success': false, 'message': data['message'] ?? 'Login failed'};
       }
     } on SocketException catch (e) {
       return {
         'success': false,
-        'message': 'Connection failed: Unable to reach server. Please check your network connection and server status.',
+        'message':
+            'Connection failed: Unable to reach server. Please check your network connection and server status.',
         'error_type': 'network',
         'details': e.message,
       };
@@ -116,14 +111,12 @@ class AuthService {
       // POST request to register endpoint
       final response = await http.post(
         Uri.parse('$baseUrl/auth/register.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(requestData),
       );
 
       final data = jsonDecode(response.body);
-      
+
       if (response.statusCode == 201 && data['success']) {
         return {
           'success': true,
@@ -138,10 +131,7 @@ class AuthService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -155,13 +145,12 @@ class AuthService {
   static Future<User?> getCurrentUser({SharedPreferences? prefs}) async {
     final instance = prefs ?? await SharedPreferences.getInstance();
     final userData = instance.getString('user_data');
-    
+
     if (userData != null) {
       return User.fromJson(jsonDecode(userData));
     }
     return null;
   }
-
 
   // Logout - clear stored user data
   static Future<void> logout() async {
@@ -175,38 +164,25 @@ class AuthService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/test.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       return jsonDecode(response.body);
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Connection error: ${e.toString()}',
-      };
+      return {'success': false, 'message': 'Connection error: ${e.toString()}'};
     }
   }
-  
+
   static Future<Map<String, dynamic>> verifyOtp(int userId, String otp) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/verify_otp.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'otp': otp,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'otp': otp}),
       );
       return jsonDecode(response.body);
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
     }
   }
 
@@ -214,36 +190,62 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/forgot_password.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email}),
       );
       return jsonDecode(response.body);
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
     }
   }
-
 
   static Future<Map<String, dynamic>> deleteAccount(int userId) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/delete_account.php'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': userId}),
       );
       return jsonDecode(response.body);
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  static Future changePassword(
+    int userId,
+    String currentPassword,
+    String newPassword,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/change_password.php'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        }),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> resetPassword(
+    String token,
+    String newPassword,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/reset_password.php'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': token, 'new_password': newPassword}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
     }
   }
 }

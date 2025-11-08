@@ -1,0 +1,18 @@
+# Enable rewrite engine
+RewriteEngine On
+
+# Handle reset password requests
+RewriteRule ^reset-password\.php$ reset-password.php [L]
+
+# Handle API requests
+RewriteRule ^api/(.*)$ api/$1 [L]
+
+# Handle other PHP files directly
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)\.php$ $1.php [L]
+
+# Default routing for other requests
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L]

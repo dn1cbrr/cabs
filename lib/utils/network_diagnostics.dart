@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import '../config/environment_config.dart';
+import '../config/environment_config_updated.dart';
 
 class NetworkDiagnostics {
   static const Duration _timeout = Duration(seconds: 10);

@@ -102,9 +102,15 @@ try {
             // Commit transaction
             $db->commit();
             
-            // Create reset link - point to the new reset-password.php page
-            $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$_SERVER['HTTP_HOST']}";
-            $resetLink = $baseUrl . "/reset-password.php?token=" . $resetToken;
+            // Create reset link - ensure correct path structure
+            $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
+            $host = $_SERVER['HTTP_HOST'];
+            $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
+            $basePath = rtrim($scriptPath, '/');
+            $resetLink = "{$protocol}://{$host}{$basePath}/../../reset-password.php?token={$resetToken}";
+            
+            // Clean up the path
+            $resetLink = str_replace('/api/auth/../../', '/', $resetLink);
             
             // Try to send email
             $emailSent = false;

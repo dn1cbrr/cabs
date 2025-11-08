@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:transit/screens/dashboard_screen.dart';
 import 'trip_history_screen.dart';
 import 'add_trip_screen.dart';
 import 'profile_screen.dart';
 import '../services/auth_service.dart';
 import '../models/trip.dart';
-import '../widgets/seat_availability_widget.dart';
-
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -19,8 +18,8 @@ class _DriverDashboardState extends State<DriverDashboard> {
   Widget build(BuildContext context) {
     // Dummy trip data for demonstration
     final dummyTrip = Trip(
-      id: 1,
-      driverId: 101,
+      id: '1',
+      driverId: '101',
       driverName: 'John Doe',
       routeDetails: 'City Center to Suburbs',
       vehicleType: 'Bus',
@@ -32,9 +31,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
       startTime: '14:00:00',
     );
 
-
     return Scaffold(
-
       appBar: AppBar(
         title: const Text('Driver Dashboard'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -57,9 +54,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  SeatAvailabilityWidget(
-                    trip: dummyTrip,
-                  ),
+                  SeatAvailabilityWidget(trip: dummyTrip),
 
                   const SizedBox(height: 20),
                   const Text(
@@ -165,7 +160,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
     // Store context reference
     final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    
+
     // Show loading indicator while fetching user data
     showDialog(
       context: context,
@@ -186,26 +181,26 @@ class _DriverDashboardState extends State<DriverDashboard> {
     try {
       // Get current user data
       final user = await AuthService.getCurrentUser();
-      
+
       // Close loading dialog
       if (mounted) {
         navigator.pop();
       }
-      
+
       if (user != null) {
         // Nav  igate to profile screen
         if (mounted) {
           navigator.push(
-            MaterialPageRoute(
-              builder: (context) => ProfileScreen(user: user),
-            ),
+            MaterialPageRoute(builder: (context) => ProfileScreen(user: user)),
           );
         }
       } else {
         // Show error if user not found
         if (mounted) {
           scaffoldMessenger.showSnackBar(
-            const SnackBar(content: Text('User not found. Please log in again.')),
+            const SnackBar(
+              content: Text('User not found. Please log in again.'),
+            ),
           );
         }
       }
@@ -214,7 +209,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
       if (mounted) {
         navigator.pop();
       }
-      
+
       // Show error message
       if (mounted) {
         scaffoldMessenger.showSnackBar(
@@ -230,7 +225,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Delete Account'),
-          content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
+          content: const Text(
+            'Are you sure you want to delete your account? This action cannot be undone.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -250,10 +247,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
     // Store context references before any async operations
     final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    
+
     // Close the confirmation dialog first
     Navigator.of(dialogContext).pop();
-    
+
     try {
       // Show progress dialog before async operation
       showDialog(
@@ -271,18 +268,18 @@ class _DriverDashboardState extends State<DriverDashboard> {
           );
         },
       );
-      
+
       // Get current user to get user ID
       final user = await AuthService.getCurrentUser();
       if (user != null) {
         // Call delete account service
         final result = await AuthService.deleteAccount(user.id);
-        
+
         // Close progress dialog
         if (mounted) {
           navigator.pop();
         }
-        
+
         if (result['success']) {
           // Show success message and navigate to login
           if (mounted) {
@@ -305,7 +302,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
         if (mounted) {
           navigator.pop();
         }
-        
+
         // Show error if user not found
         if (mounted) {
           scaffoldMessenger.showSnackBar(
@@ -318,7 +315,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
       if (mounted) {
         navigator.pop();
       }
-      
+
       // Show error message
       if (mounted) {
         scaffoldMessenger.showSnackBar(
