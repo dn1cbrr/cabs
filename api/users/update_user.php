@@ -80,9 +80,9 @@ if ($method == 'POST' || $method == 'PUT') {
     $fields = [];
     $params = [':user_id' => $data['user_id']];
     
-    $allowed_fields = ['username', 'email', 'full_name', 'phone_number', 'birthday', 
-                      'license_name', 'license_number', 'license_address', 
-                      'license_codes', 'license_expiration', 'role'];
+    $allowed_fields = ['username', 'email', 'full_name', 'phone_number', 'birthday',
+                      'license_name', 'license_number', 'license_address',
+                      'license_codes', 'license_expiration', 'role', 'is_online', 'last_seen'];
     
     foreach ($allowed_fields as $field) {
         if (isset($data[$field]) && $data[$field] !== null) {
@@ -111,17 +111,22 @@ if ($method == 'POST' || $method == 'PUT') {
         
         if ($stmt->execute()) {
             if ($stmt->rowCount() > 0) {
+                http_response_code(200);
                 echo json_encode([
                     'success' => true,
-                    'message' => 'User updated successfully'
+                    'data' => [
+                        'message' => 'User updated successfully'
+                    ]
                 ]);
             } else {
+                http_response_code(404);
                 echo json_encode([
                     'success' => false,
                     'message' => 'No user found with the given ID or no changes made'
                 ]);
             }
         } else {
+            http_response_code(500);
             echo json_encode([
                 'success' => false,
                 'message' => 'Failed to update user'
