@@ -1,22 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'services/auth_service.dart';
+import 'services/admin_user_service.dart';
+import 'services/background_location_service.dart';
+import 'services/firebase_auth_service.dart';
 import 'models/user.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/driver_dashboard_screen.dart';
+import 'screens/driver_reports_screen.dart';
 import 'screens/map_tracking_screen.dart';
+import 'screens/trip_history_screen.dart';
+import 'screens/add_trip_screen.dart';
 import 'screens/forgot_password_screen.dart';
+import 'screens/reset_password_screen.dart';
 import 'screens/multi_sensor_test_screen.dart';
 import 'screens/esp32_setup_screen.dart';
 import 'screens/esp32_seat_monitoring_screen.dart';
 import 'screens/esp32_connection_selection_screen.dart';
-import 'services/esp32_connection_service.dart';
+import 'screens/debug_tracking_screen.dart';
 import 'utils/animations.dart';
 import 'widgets/animated_widgets.dart';
+import 'utils/responsive_utils.dart';
+import 'dart:async';
 
 void main() {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set up global error handling to prevent silent crashes
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('Flutter Error: ${details.exception}');
+  };
+
+  // Run the app immediately to prevent black screen
   runApp(const MyApp());
 }
 
@@ -194,16 +215,26 @@ class MyApp extends StatelessWidget {
       home: const MyHomePage(title: 'DECINA TRANSPORT'),
       routes: {
         '/driver-dashboard': (context) => const DriverDashboardScreen(),
+        '/driver-reports': (context) => const DriverReportsScreen(),
         '/dashboard': (context) => DashboardScreen(
-          user: User(id: 0, username: '', email: '', fullName: '', role: ''),
+          user: User(id: '', username: '', email: '', fullName: '', role: ''),
         ), // This is a fallback, should use MaterialPageRoute instead
         '/map-tracking': (context) => const MapTrackingScreen(),
+        '/trip-history': (context) => TripHistoryScreen(
+          driverId: ModalRoute.of(context)!.settings.arguments as int?,
+        ),
+        '/add-trip': (context) => const AddTripScreen(),
         '/multi-sensor-test': (context) => const MultiSensorTestScreen(),
         '/esp32-setup': (context) => const ESP32SetupScreen(),
         '/esp32-connection-selection': (context) =>
             const ESP32ConnectionSelectionScreen(),
         '/esp32-seat-monitoring': (context) =>
             const ESP32SeatMonitoringScreen(),
+        '/debug-tracking': (context) => const DebugTrackingScreen(),
+        '/reset-password': (context) {
+          final token = ModalRoute.of(context)!.settings.arguments as String?;
+          return ResetPasswordScreen(token: token ?? '');
+        },
       },
     );
   }
@@ -223,26 +254,125 @@ class _MyHomePageState extends State<MyHomePage> {
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+  Timer? _heartbeatTimer;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+    // Initialize Firebase and check login status after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkLoginStatus();
+      _initializeAppAndCheckLogin();
     });
   }
 
-  void _checkLoginStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = await AuthService.isLoggedIn(prefs: prefs);
-    if (isLoggedIn && mounted) {
-      final user = await AuthService.getCurrentUser(prefs: prefs);
-      if (user != null) {
-        // ignore: use_build_context_synchronously
-        Navigator.of(context).pushReplacement(
-          PageTransitions.slideFade(DashboardScreen(user: user)),
+  Future<void> _initializeAppAndCheckLogin() async {
+    // 1. Initialize Firebase Core in the background with timeout
+    try {
+      if (Firebase.apps.isEmpty) {
+        debugPrint('🔥 Initializing Firebase Core...');
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        ).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint('⚠️ Firebase Core initialization timed out (non-blocking)');
+            return Firebase.app(); // Return default app if already initialized or throw
+          },
         );
+        debugPrint('✅ Firebase Core initialized successfully');
       }
+    } catch (e) {
+      debugPrint('❌ Firebase Core initialization error (handled): $e');
+      // Continue anyway - the app should still function for basic features
+    }
+
+    // 2. Initialize Firebase Anonymous Authentication (CRITICAL for Firestore)
+    // This enables real-time driver tracking by allowing Firestore writes
+    try {
+      debugPrint('🔐 Initializing Firebase Anonymous Auth...');
+      final authSuccess = await FirebaseAuthService.initialize().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('⚠️ Firebase Auth initialization timed out');
+          return false;
+        },
+      );
+
+      if (authSuccess) {
+        debugPrint('✅ Firebase Auth initialized - Firestore writes enabled');
+        debugPrint('   UID: ${FirebaseAuthService.getCurrentUserUid()}');
+      } else {
+        debugPrint('⚠️ Firebase Auth initialization failed - Firestore writes may not work');
+        debugPrint('   💡 Real-time driver tracking requires Firebase Authentication');
+        debugPrint('   💡 Enable Anonymous Auth in Firebase Console if not already enabled');
+      }
+    } catch (e) {
+      debugPrint('❌ Firebase Auth initialization error: $e');
+      debugPrint('   ⚠️ Driver tracking may not work without Firebase Auth');
+    }
+
+    // 3. Proceed to check login status
+    _checkLoginStatus();
+  }
+
+  void _checkLoginStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = await AuthService.isLoggedIn(prefs: prefs);
+      
+      if (!mounted) return;
+      
+      if (isLoggedIn) {
+        final user = await AuthService.getCurrentUser(prefs: prefs);
+        
+        if (!mounted) return;
+        
+        if (user != null) {
+          // Start background location tracking for drivers (non-blocking)
+          // Don't await this - let it run in background
+          _initializeDriverTracking(user);
+
+          // Navigate to dashboard immediately
+          Navigator.of(context).pushReplacement(
+            PageTransitions.slideFade(DashboardScreen(user: user)),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking login status: $e');
+      // Continue to show login screen on error
+    }
+  }
+
+  /// Initialize background location tracking for all users
+  /// This runs in the background and doesn't block the UI
+  Future<void> _initializeDriverTracking(User user) async {
+    // Start tracking for ALL users (no role check)
+    try {
+      debugPrint(
+        'Initializing background tracking for user: ${user.username}',
+      );
+      
+      // Use a timeout to prevent indefinite waiting
+      final success = await BackgroundLocationService.instance
+          .startTracking()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              debugPrint('Background tracking initialization timed out');
+              return false;
+            },
+          );
+          
+      if (success) {
+        debugPrint('Background location tracking started successfully');
+      } else {
+        debugPrint('Failed to start background location tracking');
+      }
+    } catch (e) {
+      debugPrint('Error initializing user tracking: $e');
+      // Don't throw - just log the error and continue
     }
   }
 
@@ -250,6 +380,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _stopHeartbeat();
     super.dispose();
   }
 
@@ -259,35 +390,39 @@ class _MyHomePageState extends State<MyHomePage> {
         _isLoading = true;
       });
 
-      // Debug print to show the base URL being used
-      debugPrint('Attempting login with base URL: ${AuthService.baseUrl}');
-      debugPrint('Username: ${_usernameController.text.trim()}');
+      try {
+        final result = await AuthService.login(
+          _usernameController.text.trim(),
+          _passwordController.text,
+        ).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => {
+            'success': false,
+            'message': 'Login request timed out. Please check your internet connection.',
+            'error_type': 'timeout',
+          },
+        );
 
-      final result = await AuthService.login(
-        _usernameController.text.trim(),
-        _passwordController.text,
-      );
+        if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
+        setState(() {
+          _isLoading = false;
+        });
 
-      // Debug print to show login result
-      debugPrint('Login result: ${result['success']}');
-      if (!result['success']) {
-        debugPrint('Login error: ${result['message']}');
-        debugPrint('Error type: ${result['error_type'] ?? 'unknown'}');
-      }
+        if (result['success']) {
+          final user = result['user'] as User;
+          _currentUserId = user.id;
+          _startHeartbeat();
 
-      if (result['success']) {
-        final user = result['user'] as User;
-        if (mounted) {
+          // Start background location tracking for drivers (non-blocking)
+          // Don't await this - let it run in background
+          _initializeDriverTracking(user);
+
+          // Navigate immediately
           Navigator.of(context).pushReplacement(
             PageTransitions.slideFade(DashboardScreen(user: user)),
           );
-        }
-      } else {
-        if (mounted) {
+        } else {
           // Enhanced error message with more details
           String errorMessage = result['message'];
           if (result['error_type'] == 'network') {
@@ -295,6 +430,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 '\nPlease check if the server is running and accessible.';
           } else if (result['error_type'] == 'format') {
             errorMessage += '\nServer response format is invalid.';
+          } else if (result['error_type'] == 'timeout') {
+            errorMessage += '\nThe request took too long to complete.';
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -305,84 +442,43 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           );
         }
-      }
-    }
-  }
+      } catch (e) {
+        if (!mounted) return;
+        
+        setState(() {
+          _isLoading = false;
+        });
 
-  void _testConnection() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Debug print to show the test URL being used
-    debugPrint('Testing API connection to: ${AuthService.baseUrl}test.php');
-
-    final result = await AuthService.testConnection();
-
-    setState(() {
-      _isLoading = false;
-    });
-    // Debug print to show connection test result
-    debugPrint('API Connection test result: ${result['success']}');
-    if (!result['success']) {
-      debugPrint('API Connection error: ${result['message']}');
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message']),
-          backgroundColor: result['success'] ? Colors.green : Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
-  }
-
-  void _testESP32Connection() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Import the ESP32 connection tester
-      final connectionService = ESP32ConnectionService();
-      final result = await connectionService.testConnection();
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              result
-                  ? 'ESP32 Connection Test: SUCCESS - Connected to ESP32'
-                  : 'ESP32 Connection Test: FAILED - Could not connect to ESP32',
-            ),
-            backgroundColor: result ? Colors.green : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ESP32 Connection Test: ERROR - $e'),
+            content: Text('An unexpected error occurred: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     }
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (_currentUserId != null) {
+        AdminUserService.instance.sendHeartbeat(_currentUserId!);
+      }
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final horizontalPadding = ResponsiveUtils.responsivePadding(context, 24.0);
+    final verticalPadding = ResponsiveUtils.responsivePadding(context, 16.0);
+
     return Scaffold(
       appBar: AppBar(
         flexibleSpace: Container(
@@ -397,7 +493,7 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(
           widget.title,
           style: GoogleFonts.poppins(
-            fontSize: 20,
+            fontSize: ResponsiveUtils.responsiveFontSize(context, 20),
             fontWeight: FontWeight.bold,
             color: Colors.white,
             letterSpacing: 0.5,
@@ -419,7 +515,10 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
@@ -435,7 +534,10 @@ class _MyHomePageState extends State<MyHomePage> {
                       child: Text(
                         'Welcome Back!',
                         style: GoogleFonts.poppins(
-                          fontSize: 32,
+                          fontSize: ResponsiveUtils.responsiveFontSize(
+                            context,
+                            32,
+                          ),
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                           letterSpacing: -0.5,
@@ -444,21 +546,28 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: ResponsiveUtils.responsiveSpacing(context, 12),
+                  ),
                   FadeInAnimation(
                     delay: const Duration(milliseconds: 200),
                     duration: const Duration(milliseconds: 600),
                     child: Text(
                       'Sign in to access your dashboard',
                       style: GoogleFonts.inter(
-                        fontSize: 16,
+                        fontSize: ResponsiveUtils.responsiveFontSize(
+                          context,
+                          16,
+                        ),
                         color: const Color(0xFF64748B),
                         fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: ResponsiveUtils.responsiveSpacing(context, 20),
+                  ),
                   // Logo with scale animation
                   FadeInAnimation(
                     delay: const Duration(milliseconds: 300),
@@ -471,15 +580,19 @@ class _MyHomePageState extends State<MyHomePage> {
                         builder: (context, scale, child) {
                           return Transform.scale(scale: scale, child: child);
                         },
-                        child: const Image(
-                          image: AssetImage('lib/images/decinalogo.png'),
-                          width: 200,
-                          height: 130,
+                        child: Image(
+                          image: const AssetImage('lib/images/decinalogo.png'),
+                          width: MediaQuery.of(context).size.width * 0.5,
+                          height:
+                              (MediaQuery.of(context).size.width * 0.5) *
+                              (130 / 200),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  SizedBox(
+                    height: ResponsiveUtils.responsiveSpacing(context, 40),
+                  ),
 
                   // Username Field with animation
                   AnimatedListItem(
@@ -611,34 +724,6 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   const SizedBox(height: 16),
 
-                  //Test Connection Buttons with animation
-                  AnimatedListItem(
-                    index: 4,
-                    delay: const Duration(milliseconds: 100),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: AnimatedButton(
-                            onPressed: _isLoading ? null : _testConnection,
-                            isOutlined: true,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: const Text('Test API'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: AnimatedButton(
-                            onPressed: _isLoading ? null : _testESP32Connection,
-                            isOutlined: true,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: const Text('Test ESP32'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
                   // Register Button with animation
                   AnimatedListItem(
                     index: 5,
@@ -678,6 +763,6 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
       ),
-    );
+    ); //I love you Irish <3
   }
 }

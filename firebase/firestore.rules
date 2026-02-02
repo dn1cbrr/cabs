@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Realtime driver locations
+    match /drivers_locations/{driverId} {
+      // Any authenticated user (including anonymous) can read driver locations
+      allow read: if request.auth != null;
+
+      // Any authenticated user (including anonymous) can write driver locations
+      // This is safe because:
+      // 1. Users are authenticated (even if anonymously)
+      // 2. The app uses MySQL for actual user authentication
+      // 3. This is only for real-time location sharing
+      allow write: if request.auth != null;
+    }
+    
+    // Test collection for connection testing
+    match /test/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
